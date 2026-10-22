@@ -22,6 +22,9 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Remove Old Duplicate WebP Icons
+        run: find app/src/main/res -name "ic_launcher*.webp" -delete
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
