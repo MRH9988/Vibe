@@ -1746,7 +1746,6 @@ fun BottomSheetPlayer(
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .glassmorphic(shape = CircleShape)
                 .clickable {
                     if (isListenTogetherGuest) {
                         playerConnection.toggleMute()
