@@ -863,7 +863,7 @@ fun BottomSheetPlayer(
                                         .alpha(backgroundAlpha)
                                         .background(Brush.verticalGradient(colorStops = gradientColorStops))
                                         .background(Color.Black.copy(alpha = 0.2f)),
-                                />
+                                ) {}
                             }
                         }
                     }
