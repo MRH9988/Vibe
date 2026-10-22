@@ -5,7 +5,6 @@
 
 package com.metrolist.music.ui.player
 
-import androidx.activity.compose.BackHandler
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -13,6 +12,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -55,6 +55,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -73,9 +74,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -90,6 +90,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -111,24 +113,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.Player.STATE_ENDED
 import androidx.navigation.NavController
 import androidx.palette.graphics.Palette
-import com.metrolist.music.LocalNavController
 import coil3.compose.AsyncImage
 import coil3.imageLoader
 import coil3.request.ImageRequest
@@ -137,6 +136,7 @@ import coil3.toBitmap
 import com.metrolist.music.LocalDatabase
 import com.metrolist.music.LocalDownloadUtil
 import com.metrolist.music.LocalListenTogetherManager
+import com.metrolist.music.LocalNavController
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
 import com.metrolist.music.constants.CropAlbumArtKey
@@ -166,6 +166,7 @@ import com.metrolist.music.listentogether.RoomRole
 import com.metrolist.music.models.MediaMetadata
 import com.metrolist.music.ui.component.BottomSheet
 import com.metrolist.music.ui.component.BottomSheetState
+import com.metrolist.music.ui.component.Icon as MIcon
 import com.metrolist.music.ui.component.LocalBottomSheetPageState
 import com.metrolist.music.ui.component.LocalMenuState
 import com.metrolist.music.ui.component.Lyrics
@@ -180,7 +181,6 @@ import com.metrolist.music.ui.theme.PlayerColorExtractor
 import com.metrolist.music.ui.theme.PlayerSliderColors
 import com.metrolist.music.ui.utils.ShowMediaInfo
 import com.metrolist.music.ui.utils.ShowOffsetDialog
-import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.makeTimeString
 import com.metrolist.music.utils.rememberEnumPreference
 import com.metrolist.music.utils.rememberPreference
@@ -194,12 +194,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.roundToInt
-import com.metrolist.music.ui.component.Icon as MIcon
-import com.metrolist.music.constants.SleepTimerDefaultKey
-import com.metrolist.music.constants.SleepTimerFadeOutKey
-import com.metrolist.music.constants.SleepTimerStopAfterCurrentSongKey
-import androidx.compose.foundation.shape.CircleShape
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -365,11 +359,6 @@ fun BottomSheetPlayer(
     // Use Cast state when casting, otherwise local player
     val effectiveIsPlaying = if (isCasting) castIsPlaying else isPlaying
 
-    // Use State objects for position/duration to pass to MiniPlayer without causing recomposition
-    // These states persist across playback state changes to ensure continuous progress updates.
-    // Seed from the player's current values so re-entering composition on resume shows the real
-    // time immediately instead of flashing 0:00 until the first poll fires. runCatching guards the
-    // player-not-ready race; the poll loop corrects duration if it isn't known yet.
     val positionState = remember { mutableLongStateOf(runCatching { playerConnection.player.currentPosition }.getOrDefault(0L)) }
     val durationState = remember {
         mutableLongStateOf(
@@ -378,7 +367,6 @@ fun BottomSheetPlayer(
         )
     }
 
-    // Convenience accessors for local use
     var position by positionState
     var duration by durationState
 
@@ -395,7 +383,6 @@ fun BottomSheetPlayer(
     var sliderPosition by remember {
         mutableStateOf<Long?>(null)
     }
-    // Track when we last manually set position to avoid Cast overwriting it
     var lastManualSeekTime by remember { mutableLongStateOf(0L) }
 
     var gradientColors by remember {
@@ -462,60 +449,59 @@ fun BottomSheetPlayer(
     val iconButtonColor = MaterialTheme.colorScheme.primary
 
     val (playerButtonContainerColor, playerButtonContentColor) =
-            when {
-                playerBackground == PlayerBackgroundStyle.BLUR ||
-                    playerBackground == PlayerBackgroundStyle.GRADIENT -> {
-                    when (playerButtonsStyle) {
-                        PlayerButtonsStyle.DEFAULT -> {
-                            Pair(
-                                Color.White.copy(alpha = 0.2f),
-                                Color.White,
-                            )
-                        }
-
-                        PlayerButtonsStyle.PRIMARY -> {
-                            Pair(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.onPrimary,
-                            )
-                        }
-
-                        PlayerButtonsStyle.TERTIARY -> {
-                            Pair(
-                                MaterialTheme.colorScheme.tertiary,
-                                MaterialTheme.colorScheme.onTertiary,
-                            )
-                        }
+        when {
+            playerBackground == PlayerBackgroundStyle.BLUR ||
+                playerBackground == PlayerBackgroundStyle.GRADIENT -> {
+                when (playerButtonsStyle) {
+                    PlayerButtonsStyle.DEFAULT -> {
+                        Pair(
+                            Color.White.copy(alpha = 0.2f),
+                            Color.White,
+                        )
                     }
-                }
-                else -> {
-                    when (playerButtonsStyle) {
-                        PlayerButtonsStyle.DEFAULT -> {
-                            if (useDarkTheme) {
-                                Pair(Color.White, Color.Black)
-                            } else {
-                                Pair(Color.Black, Color.White)
-                            }
-                        }
 
-                        PlayerButtonsStyle.PRIMARY -> {
-                            Pair(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.onPrimary,
-                            )
-                        }
+                    PlayerButtonsStyle.PRIMARY -> {
+                        Pair(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
 
-                        PlayerButtonsStyle.TERTIARY -> {
-                            Pair(
-                                MaterialTheme.colorScheme.tertiary,
-                                MaterialTheme.colorScheme.onTertiary,
-                            )
-                        }
+                    PlayerButtonsStyle.TERTIARY -> {
+                        Pair(
+                            MaterialTheme.colorScheme.tertiary,
+                            MaterialTheme.colorScheme.onTertiary,
+                        )
                     }
                 }
             }
+            else -> {
+                when (playerButtonsStyle) {
+                    PlayerButtonsStyle.DEFAULT -> {
+                        if (useDarkTheme) {
+                            Pair(Color.White, Color.Black)
+                        } else {
+                            Pair(Color.Black, Color.White)
+                        }
+                    }
 
-    // Separate colors for Previous/Next buttons in PRIMARY/TERTIARY modes
+                    PlayerButtonsStyle.PRIMARY -> {
+                        Pair(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+
+                    PlayerButtonsStyle.TERTIARY -> {
+                        Pair(
+                            MaterialTheme.colorScheme.tertiary,
+                            MaterialTheme.colorScheme.onTertiary,
+                        )
+                    }
+                }
+            }
+        }
+
     val sideButtonColors =
         when {
             playerBackground == PlayerBackgroundStyle.BLUR ||
@@ -569,8 +555,8 @@ fun BottomSheetPlayer(
                 }
             }
         }
-        val sideButtonContainerColor = sideButtonColors.first
-        val sideButtonContentColor = sideButtonColors.second
+    val sideButtonContainerColor = sideButtonColors.first
+    val sideButtonContentColor = sideButtonColors.second
 
     val download by LocalDownloadUtil.current
         .getDownload(mediaMetadata?.id ?: "")
@@ -615,7 +601,6 @@ fun BottomSheetPlayer(
     LaunchedEffect(sleepTimerDefault) { sleepTimerValue = sleepTimerDefault }
     val sleepTimerStopAfterCurrentSong by rememberPreference(SleepTimerStopAfterCurrentSongKey, false)
     val sleepTimerFadeOut by rememberPreference(SleepTimerFadeOutKey, false)
-
 
     if (showSleepTimerDialog) {
         AlertDialog(
@@ -730,43 +715,30 @@ fun BottomSheetPlayer(
         mutableStateOf(false)
     }
 
-    // Position update - only for local playback
-    // When casting, we use castPosition directly to avoid sync issues
-    // Use isPlaying instead of playbackState to ensure continuous updates during playback
     LaunchedEffect(isPlaying, isCasting) {
         if (!isCasting && isPlaying) {
             while (isActive) {
-                delay(100) // Update more frequently for smoother progress bar
-                if (sliderPosition == null) { // Only update if user isn't dragging
+                delay(100)
+                if (sliderPosition == null) {
                     position = playerConnection.player.currentPosition
-                    // Don't clobber a valid (metadata-derived) duration with 0/UNSET mid-resolve.
                     playerConnection.player.duration.takeIf { it > 0 }?.let { duration = it }
                 }
             }
         }
     }
 
-    // Also update position when playback state changes (e.g., song change, seek)
     LaunchedEffect(playbackState, mediaMetadata?.id) {
         if (!isCasting) {
             position = playerConnection.player.currentPosition
-            // Prefer the song's known duration (from metadata, available instantly from the restored
-            // queue) so the slider range is right even when restored paused / before the stream
-            // resolves; fall back to the player's duration once it is known.
             duration = (mediaMetadata?.duration?.takeIf { it > 0 }?.toLong()?.times(1000L))
                 ?: playerConnection.player.duration
         }
     }
 
-    // Auto-switch from repeat one to repeat all when song ends naturally
     var previousMediaId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(playbackState, mediaMetadata?.id) {
         val currentId = mediaMetadata?.id
-
-        // Only switch from REPEAT_ONE to REPEAT_ALL when playback naturally ended
-        // (i.e., the player transitioned to ENDED state and then moved to next track).
-        // Do NOT switch on manual skips.
         if (currentId != null &&
             currentId != previousMediaId &&
             previousMediaId != null &&
@@ -775,17 +747,13 @@ fun BottomSheetPlayer(
             !isListenTogetherGuest) {
             playerConnection.player.setRepeatMode(Player.REPEAT_MODE_ALL)
         }
-
         previousMediaId = currentId
     }
 
-    // When casting, use Cast position/duration directly
-    // But wait a bit after manual seeks to let Cast catch up
     LaunchedEffect(isCasting, castPosition, castDuration) {
         if (isCasting && sliderPosition == null) {
             val timeSinceManualSeek = System.currentTimeMillis() - lastManualSeekTime
             if (timeSinceManualSeek > 1500) {
-                // Only update from Cast if we haven't manually seeked recently
                 position = castPosition
                 if (castDuration > 0) duration = castDuration
             }
@@ -895,7 +863,7 @@ fun BottomSheetPlayer(
                                         .alpha(backgroundAlpha)
                                         .background(Brush.verticalGradient(colorStops = gradientColorStops))
                                         .background(Color.Black.copy(alpha = 0.2f)),
-                                )
+                                />
                             }
                         }
                     }
@@ -1130,8 +1098,6 @@ fun BottomSheetPlayer(
                             bottomEnd = 50.dp,
                         )
 
-                    val middleShape = RoundedCornerShape(3.dp)
-
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1221,7 +1187,6 @@ fun BottomSheetPlayer(
                                     )
                                 }
                             } else {
-                                // For episodes, show saved state (inLibrary); for songs, show liked state
                                 val isEpisode = currentSong?.song?.isEpisode == true
                                 val isFavorite = if (isEpisode) currentSong?.song?.inLibrary != null else currentSong?.song?.liked == true
                                 FilledIconButton(
@@ -1467,9 +1432,9 @@ fun BottomSheetPlayer(
                         },
                         enabled = !isListenTogetherGuest,
                         thumb = { Spacer(modifier = Modifier.size(0.dp)) },
-                        track = { sliderState ->
+                        track = { stateSlider ->
                             PlayerSliderTrack(
-                                sliderState = sliderState,
+                                sliderState = stateSlider,
                                 colors = PlayerSliderColors.getSliderColors(textButtonColor, playerBackground, useDarkTheme),
                             )
                         },
@@ -1728,81 +1693,80 @@ fun BottomSheetPlayer(
                             }
 
                             Box(modifier = Modifier.weight(1f)) {
-            ResizableIconButton(
-                icon = R.drawable.skip_previous,
-                enabled = canSkipPrevious && !isListenTogetherGuest,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .size(32.dp)
-                    .align(Alignment.Center)
-                    .alpha(if (isListenTogetherGuest) 0.5f else 1f),
-                onClick = playerConnection::seekToPrevious
-            )
-        }
+                                ResizableIconButton(
+                                    icon = R.drawable.skip_previous,
+                                    enabled = canSkipPrevious && !isListenTogetherGuest,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .align(Alignment.Center)
+                                        .alpha(if (isListenTogetherGuest) 0.5f else 1f),
+                                    onClick = playerConnection::seekToPrevious,
+                                )
+                            }
 
-        Spacer(Modifier.width(16.dp))
+                            Spacer(Modifier.width(16.dp))
 
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .clickable {
-                    if (isListenTogetherGuest) {
-                        playerConnection.toggleMute()
-                        return@clickable
-                    }
-                    if (isCasting) {
-                        if (castIsPlaying) {
-                            castHandler?.pause()
-                        } else {
-                            castHandler?.play()
-                        }
-                    } else if (playbackState == STATE_ENDED) {
-                        playerConnection.player.seekTo(0)
-                        playerConnection.player.playWhenReady = true
-                    } else {
-                        playerConnection.player.playPause()
-                    }
-                }
-                .focusRequester(focusRequester),
-        ) {
-            Image(
-                painter = painterResource(
-                    if (isListenTogetherGuest) {
-                        if (isMuted) R.drawable.volume_off else R.drawable.volume_up
-                    } else if (playbackState == STATE_ENDED) {
-                        R.drawable.replay
-                    } else if (effectiveIsPlaying) {
-                        R.drawable.pause
-                    } else {
-                        R.drawable.play
-                    }
-                ),
-                contentDescription = null,
-                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimary),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(36.dp)
-            )
-        }
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        if (isListenTogetherGuest) {
+                                            playerConnection.toggleMute()
+                                            return@clickable
+                                        }
+                                        if (isCasting) {
+                                            if (castIsPlaying) {
+                                                castHandler?.pause()
+                                            } else {
+                                                castHandler?.play()
+                                            }
+                                        } else if (playbackState == STATE_ENDED) {
+                                            playerConnection.player.seekTo(0)
+                                            playerConnection.player.playWhenReady = true
+                                        } else {
+                                            playerConnection.playPause()
+                                        }
+                                    }
+                                    .focusRequester(focusRequester),
+                            ) {
+                                Image(
+                                    painter = painterResource(
+                                        if (isListenTogetherGuest) {
+                                            if (isMuted) R.drawable.volume_off else R.drawable.volume_up
+                                        } else if (playbackState == STATE_ENDED) {
+                                            R.drawable.replay
+                                        } else if (effectiveIsPlaying) {
+                                            R.drawable.pause
+                                        } else {
+                                            R.drawable.play
+                                        },
+                                    ),
+                                    contentDescription = null,
+                                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimary),
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .size(36.dp),
+                                )
+                            }
 
-        Spacer(Modifier.width(16.dp))
-
-        Box(modifier = Modifier.weight(1f)) {
-            ResizableIconButton(
-                icon = R.drawable.skip_next,
-                enabled = canSkipNext && !isListenTogetherGuest,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .size(32.dp)
-                    .align(Alignment.Center)
-                    .alpha(if (isListenTogetherGuest) 0.5f else 1f),
-                onClick = playerConnection::seekToNext
-            )
-        }
+                            Spacer(Modifier.width(16.dp))
 
                             Box(modifier = Modifier.weight(1f)) {
-                                // For episodes, show saved state (inLibrary); for songs, show liked state
+                                ResizableIconButton(
+                                    icon = R.drawable.skip_next,
+                                    enabled = canSkipNext && !isListenTogetherGuest,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .align(Alignment.Center)
+                                        .alpha(if (isListenTogetherGuest) 0.5f else 1f),
+                                    onClick = playerConnection::seekToNext,
+                                )
+                            }
+
+                            Box(modifier = Modifier.weight(1f)) {
                                 val isEpisode = currentSong?.song?.isEpisode == true
                                 val isFavorite = if (isEpisode) currentSong?.song?.inLibrary != null else currentSong?.song?.liked == true
                                 ResizableIconButton(
@@ -1824,7 +1788,6 @@ fun BottomSheetPlayer(
 
         when (LocalConfiguration.current.orientation) {
             Configuration.ORIENTATION_LANDSCAPE -> {
-                // Calculate vertical padding like OuterTune
                 val density = LocalDensity.current
                 val verticalPadding =
                     max(
@@ -1849,7 +1812,6 @@ fun BottomSheetPlayer(
                                 .weight(1f)
                                 .nestedScroll(state.preUpPostDownNestedScrollConnection),
                     ) {
-                        // Remember lambdas to prevent unnecessary recomposition
                         val currentSliderPosition by rememberUpdatedState(sliderPosition)
                         val sliderPositionProvider = remember { { currentSliderPosition } }
                         val isExpandedProvider = remember(state) { { state.isExpanded } }
@@ -1912,7 +1874,6 @@ fun BottomSheetPlayer(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier.weight(1f),
                     ) {
-                        // Remember lambdas to prevent unnecessary recomposition
                         val currentSliderPosition by rememberUpdatedState(sliderPosition)
                         val sliderPositionProvider = remember { { currentSliderPosition } }
                         val isExpandedProvider = remember(state) { { state.isExpanded } }
@@ -2038,9 +1999,6 @@ fun InlineLyricsView(
         }
     }
 
-    // Prefetch lyrics for the next queue item only while the lyrics pane is visible, the app is in the
-    // foreground, and the current track's lyrics row has finished loading (avoids competing with the
-    // active fetch).
     LaunchedEffect(
         nextMetadata?.id,
         showLyrics,
@@ -2050,8 +2008,8 @@ fun InlineLyricsView(
     ) {
         if (!showLyrics || !appInForeground || nextMetadata == null) return@LaunchedEffect
         val loadedForCurrent =
-            currentLyrics?.let { lyrics ->
-                mediaMetadata == null || lyrics.id == mediaMetadata.id
+            currentLyrics?.let { lyr ->
+                mediaMetadata == null || lyr.id == mediaMetadata.id
             } == true
         if (mediaMetadata != null && !loadedForCurrent) return@LaunchedEffect
         val nextId = nextMetadata.id
