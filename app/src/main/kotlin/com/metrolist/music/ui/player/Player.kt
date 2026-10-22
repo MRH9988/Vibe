@@ -460,42 +460,60 @@ fun BottomSheetPlayer(
     val TextBackgroundColor = MaterialTheme.colorScheme.onSurface
     val textButtonColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
     val iconButtonColor = MaterialTheme.colorScheme.primary
-  
-                    PlayerButtonsStyle.TERTIARY -> {
-                        Pair(
-                            MaterialTheme.colorScheme.tertiary,
-                            MaterialTheme.colorScheme.onTertiary,
-                        )
-                    }
-                }
-            }
 
-            else -> {
-                when (playerButtonsStyle) {
-                    PlayerButtonsStyle.DEFAULT -> {
-                        if (useDarkTheme) {
-                            Pair(Color.White, Color.Black)
-                        } else {
-                            Pair(Color.Black, Color.White)
+    val (playerButtonContainerColor, playerButtonContentColor) =
+            when {
+                playerBackground == PlayerBackgroundStyle.BLUR ||
+                    playerBackground == PlayerBackgroundStyle.GRADIENT -> {
+                    when (playerButtonsStyle) {
+                        PlayerButtonsStyle.DEFAULT -> {
+                            Pair(
+                                Color.White.copy(alpha = 0.2f),
+                                Color.White,
+                            )
+                        }
+
+                        PlayerButtonsStyle.PRIMARY -> {
+                            Pair(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.onPrimary,
+                            )
+                        }
+
+                        PlayerButtonsStyle.TERTIARY -> {
+                            Pair(
+                                MaterialTheme.colorScheme.tertiary,
+                                MaterialTheme.colorScheme.onTertiary,
+                            )
                         }
                     }
+                }
+                else -> {
+                    when (playerButtonsStyle) {
+                        PlayerButtonsStyle.DEFAULT -> {
+                            if (useDarkTheme) {
+                                Pair(Color.White, Color.Black)
+                            } else {
+                                Pair(Color.Black, Color.White)
+                            }
+                        }
 
-                    PlayerButtonsStyle.PRIMARY -> {
-                        Pair(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.onPrimary,
-                        )
-                    }
+                        PlayerButtonsStyle.PRIMARY -> {
+                            Pair(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.onPrimary,
+                            )
+                        }
 
-                    PlayerButtonsStyle.TERTIARY -> {
-                        Pair(
-                            MaterialTheme.colorScheme.tertiary,
-                            MaterialTheme.colorScheme.onTertiary,
-                        )
+                        PlayerButtonsStyle.TERTIARY -> {
+                            Pair(
+                                MaterialTheme.colorScheme.tertiary,
+                                MaterialTheme.colorScheme.onTertiary,
+                            )
+                        }
                     }
                 }
             }
-        }
 
     // Separate colors for Previous/Next buttons in PRIMARY/TERTIARY modes
     val sideButtonColors =
