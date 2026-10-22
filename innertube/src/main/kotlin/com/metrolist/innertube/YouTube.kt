@@ -335,7 +335,12 @@ object YouTube {
                     if (section.musicShelfRenderer != null) {
                         val shelf = section.musicShelfRenderer
                         val items = shelf.contents?.getItems()?.mapNotNull { SearchPage.toYTItem(it) } ?: emptyList()
-                        searchItems.addAll(items)
+                        searchItems.addAll(
+        items.filterNot { item ->
+            VibeContentFilter.isBanned(item.title) || 
+            VibeContentFilter.isBanned(item.subtitle)
+        }
+    )
                         if (searchContinuation == null) {
                             searchContinuation = shelf.continuations?.getContinuation()
                         }
@@ -3390,4 +3395,30 @@ internal class UploadProgressInputStream(
         bytesRead += count
         onProgress((bytesRead.toFloat() / contentLength).coerceAtMost(1f))
     }
+}
+
+
+// =====================================================================
+// STEP 2: VIBE REGIONAL BLACKLIST & TASTE SANITIZER
+// =====================================================================
+
+object VibeContentFilter {
+    // Regex strictly matching unwanted regional chart and wedding spam
+    private val bannedRegex = Regex(
+        pattern = "(?i)\\b(Hindi|Shaadi|Sadhi|Romantic Hits|Top 10|Top 20|Remix|Lofi Mashup|Bhojpuri)\\b"
+    )
+
+    // Helper to test any title, artist, or album string
+    fun isBanned(text: String?): Boolean {
+        if (text.isNullOrEmpty()) return false
+        return bannedRegex.containsMatchIn(text)
+    }
+
+    // Default US Headers to prevent YouTube from injecting local region trending charts
+    val usHeaders: Map<String, String> = mapOf(
+        "gl" to "US",
+        "hl" to "en-US",
+        "X-YouTube-Client-Name" to "WEB_REMIX",
+        "X-YouTube-Client-Version" to "1.20230508.01.00"
+    )
 }
