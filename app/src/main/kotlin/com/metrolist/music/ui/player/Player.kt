@@ -198,6 +198,7 @@ import com.metrolist.music.ui.component.Icon as MIcon
 import com.metrolist.music.constants.SleepTimerDefaultKey
 import com.metrolist.music.constants.SleepTimerFadeOutKey
 import com.metrolist.music.constants.SleepTimerStopAfterCurrentSongKey
+import androidx.compose.foundation.shape.CircleShape
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -456,42 +457,10 @@ fun BottomSheetPlayer(
         }
     }
 
-    val TextBackgroundColor by animateColorAsState(
-        targetValue =
-            when (playerBackground) {
-                PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.onBackground
-                PlayerBackgroundStyle.BLUR -> Color.White
-                PlayerBackgroundStyle.GRADIENT -> Color.White
-            },
-        label = "TextBackgroundColor",
-    )
-
-    val icBackgroundColor by animateColorAsState(
-        targetValue =
-            when (playerBackground) {
-                PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.surface
-                PlayerBackgroundStyle.BLUR -> Color.Black
-                PlayerBackgroundStyle.GRADIENT -> Color.Black
-            },
-        label = "icBackgroundColor",
-    )
-
-    val (textButtonColor, iconButtonColor) =
-        when {
-            playerBackground == PlayerBackgroundStyle.BLUR ||
-                playerBackground == PlayerBackgroundStyle.GRADIENT -> {
-                when (playerButtonsStyle) {
-                    PlayerButtonsStyle.DEFAULT -> {
-                        Pair(Color.White, Color.Black)
-                    }
-
-                    PlayerButtonsStyle.PRIMARY -> {
-                        Pair(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.onPrimary,
-                        )
-                    }
-
+    val TextBackgroundColor = MaterialTheme.colorScheme.onSurface
+    val textButtonColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    val iconButtonColor = MaterialTheme.colorScheme.primary
+  
                     PlayerButtonsStyle.TERTIARY -> {
                         Pair(
                             MaterialTheme.colorScheme.tertiary,
@@ -1739,86 +1708,79 @@ fun BottomSheetPlayer(
                             }
 
                             Box(modifier = Modifier.weight(1f)) {
-                                ResizableIconButton(
-                                    icon = R.drawable.skip_previous,
-                                    enabled = canSkipPrevious && !isListenTogetherGuest,
-                                    color = TextBackgroundColor,
-                                    modifier =
-                                        Modifier
-                                            .size(32.dp)
-                                            .align(Alignment.Center)
-                                            .alpha(if (isListenTogetherGuest) 0.5f else 1f),
-                                    onClick = playerConnection::seekToPrevious,
-                                )
-                            }
+            ResizableIconButton(
+                icon = R.drawable.skip_previous,
+                enabled = canSkipPrevious && !isListenTogetherGuest,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .size(32.dp)
+                    .align(Alignment.Center)
+                    .alpha(if (isListenTogetherGuest) 0.5f else 1f),
+                onClick = playerConnection::seekToPrevious
+            )
+        }
 
-                            Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(16.dp))
 
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .size(72.dp)
-                                        .clip(RoundedCornerShape(playPauseRoundness))
-                                        .background(textButtonColor)
-                                        .clickable {
-                                            if (isListenTogetherGuest) {
-                                                playerConnection.toggleMute()
-                                                return@clickable
-                                            }
-                                            if (isCasting) {
-                                                if (castIsPlaying) {
-                                                    castHandler?.pause()
-                                                } else {
-                                                    castHandler?.play()
-                                                }
-                                            } else if (playbackState == STATE_ENDED) {
-                                                playerConnection.player.seekTo(0, 0)
-                                                playerConnection.player.playWhenReady = true
-                                            } else {
-                                                playerConnection.player.togglePlayPause()
-                                            }
-                                        }
-                                        .focusRequester(focusRequester),
-                            ) {
-                                Image(
-                                    painter =
-                                        painterResource(
-                                            if (isListenTogetherGuest) {
-                                                if (isMuted) R.drawable.volume_off else R.drawable.volume_up
-                                            } else if (playbackState ==
-                                                STATE_ENDED
-                                            ) {
-                                                R.drawable.replay
-                                            } else if (effectiveIsPlaying) {
-                                                R.drawable.pause
-                                            } else {
-                                                R.drawable.play
-                                            },
-                                        ),
-                                    contentDescription = null,
-                                    colorFilter = ColorFilter.tint(iconButtonColor),
-                                    modifier =
-                                        Modifier
-                                            .align(Alignment.Center)
-                                            .size(36.dp),
-                                )
-                            }
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .glassmorphic(shape = CircleShape)
+                .clickable {
+                    if (isListenTogetherGuest) {
+                        playerConnection.toggleMute()
+                        return@clickable
+                    }
+                    if (isCasting) {
+                        if (castIsPlaying) {
+                            castHandler?.pause()
+                        } else {
+                            castHandler?.play()
+                        }
+                    } else if (playbackState == STATE_ENDED) {
+                        playerConnection.player.seekTo(0)
+                        playerConnection.player.playWhenReady = true
+                    } else {
+                        playerConnection.player.playPause()
+                    }
+                }
+                .focusRequester(focusRequester),
+        ) {
+            Image(
+                painter = painterResource(
+                    if (isListenTogetherGuest) {
+                        if (isMuted) R.drawable.volume_off else R.drawable.volume_up
+                    } else if (playbackState == STATE_ENDED) {
+                        R.drawable.replay
+                    } else if (effectiveIsPlaying) {
+                        R.drawable.pause
+                    } else {
+                        R.drawable.play
+                    }
+                ),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimary),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(36.dp)
+            )
+        }
 
-                            Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(16.dp))
 
-                            Box(modifier = Modifier.weight(1f)) {
-                                ResizableIconButton(
-                                    icon = R.drawable.skip_next,
-                                    enabled = canSkipNext && !isListenTogetherGuest,
-                                    color = TextBackgroundColor,
-                                    modifier =
-                                        Modifier
-                                            .size(32.dp)
-                                            .align(Alignment.Center)
-                                            .alpha(if (isListenTogetherGuest) 0.5f else 1f),
-                                    onClick = playerConnection::seekToNext,
-                                )
-                            }
+        Box(modifier = Modifier.weight(1f)) {
+            ResizableIconButton(
+                icon = R.drawable.skip_next,
+                enabled = canSkipNext && !isListenTogetherGuest,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .size(32.dp)
+                    .align(Alignment.Center)
+                    .alpha(if (isListenTogetherGuest) 0.5f else 1f),
+                onClick = playerConnection::seekToNext
+            )
+        }
 
                             Box(modifier = Modifier.weight(1f)) {
                                 // For episodes, show saved state (inLibrary); for songs, show liked state
