@@ -498,7 +498,7 @@ fun BottomSheetPlayer(
         }
 
     // Separate colors for Previous/Next buttons in PRIMARY/TERTIARY modes
-    val (sideButtonContainerColor, sideButtonContentColor) =
+    val sideButtonColors =
         when {
             playerBackground == PlayerBackgroundStyle.BLUR ||
                 playerBackground == PlayerBackgroundStyle.GRADIENT -> {
@@ -551,6 +551,8 @@ fun BottomSheetPlayer(
                 }
             }
         }
+        val sideButtonContainerColor = sideButtonColors.first
+        val sideButtonContentColor = sideButtonColors.second
 
     val download by LocalDownloadUtil.current
         .getDownload(mediaMetadata?.id ?: "")
