@@ -25,6 +25,19 @@ jobs:
       - name: Remove Old Duplicate WebP Icons
         run: find app/src/main/res -name "ic_launcher*.webp" -delete
 
+      - name: Generate Debug Keystore
+        run: |
+          mkdir -p ~/.android
+          keytool -genkeypair -v \
+            -keystore ~/.android/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -38,6 +51,7 @@ jobs:
 
       - name: Upload Vibe APK
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Vibe-Preview-APK
           path: app/build/outputs/apk/debug/*.apk
