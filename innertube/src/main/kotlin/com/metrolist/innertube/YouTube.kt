@@ -336,10 +336,9 @@ object YouTube {
                         val shelf = section.musicShelfRenderer
                         val items = shelf.contents?.getItems()?.mapNotNull { SearchPage.toYTItem(it) } ?: emptyList()
                         searchItems.addAll(
-        items.filterNot { item ->
-            VibeContentFilter.isBanned(item.title) || 
-            VibeContentFilter.isBanned(item.subtitle)
-        }
+     items.filterNot { item ->
+    VibeContentFilter.isBanned(item.title)
+}
     )
                         if (searchContinuation == null) {
                             searchContinuation = shelf.continuations?.getContinuation()
