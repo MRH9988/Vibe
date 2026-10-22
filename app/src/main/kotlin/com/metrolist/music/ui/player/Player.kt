@@ -1726,8 +1726,8 @@ fun BottomSheetPlayer(
                                             playerConnection.player.seekTo(0)
                                             playerConnection.player.playWhenReady = true
                                         } else {
-                                            playerConnection.playPause()
-                                        }
+                                playerConnection.togglePlayPause()
+                            }
                                     }
                                     .focusRequester(focusRequester),
                             ) {
