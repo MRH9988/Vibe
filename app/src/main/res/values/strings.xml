@@ -7,6 +7,7 @@
 <!-- Translators: Do not modify this file for translations, use InnerTune's Weblate instead. -->
 
 <resources>
+    <string name="app_name">Vibe</string>
     <!-- Bottom navigation -->
     <string name="home">Home</string>
     <string name="songs">Songs</string>
